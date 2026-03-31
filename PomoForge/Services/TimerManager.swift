@@ -213,9 +213,10 @@ class TimerManager: ObservableObject {
             forName: .intervalChanged, object: nil, queue: .main
         ) { [weak self] notification in
             guard let self else { return }
+            let intervalObject = notification.object as? TimerInterval
             Task { @MainActor in
                 self.playSound()
-                if let interval = notification.object as? TimerInterval {
+                if let interval = intervalObject {
                     if interval.type == .work {
                         self.triggerNotificationHaptic(.warning)
                     } else {
