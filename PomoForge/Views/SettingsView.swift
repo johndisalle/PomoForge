@@ -93,7 +93,7 @@ struct SettingsView: View {
                 }) {
                     HStack {
                         Image(systemName: sound.icon)
-                            .foregroundStyle(sound.requiresPro && subscriptionManager.tier != .pro ? .tertiary : .orange)
+                            .foregroundStyle(sound.requiresPro && subscriptionManager.tier != .pro ? Color.gray : Color.orange)
                             .frame(width: 24)
                         Text(sound.name)
                             .foregroundStyle(.primary)
