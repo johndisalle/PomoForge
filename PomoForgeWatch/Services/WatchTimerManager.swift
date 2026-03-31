@@ -2,6 +2,7 @@
 // Watch-specific timer manager (standalone, syncs via WatchConnectivity if needed)
 
 import SwiftUI
+import Combine
 import WatchKit
 
 class WatchTimerManager: ObservableObject {
