@@ -2,6 +2,7 @@
 // Central timer orchestrator — bridges TimerEngine with UI, haptics, sounds, persistence
 
 import SwiftUI
+import Combine
 import CoreData
 import AVFoundation
 

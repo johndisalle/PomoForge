@@ -2,6 +2,7 @@
 // Pure timer state machine — no UI dependencies
 
 import Foundation
+import Combine
 
 enum TimerState: Equatable {
     case idle

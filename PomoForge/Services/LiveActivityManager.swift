@@ -3,6 +3,7 @@
 // PomoForgeTimerAttributes is defined in SharedTypes.swift
 
 import Foundation
+import Combine
 import ActivityKit
 import SwiftUI
 
