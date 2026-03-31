@@ -18,7 +18,7 @@ struct CurrentSessionProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (CurrentSessionEntry) -> Void) {
-        let data = WidgetManager.shared.readCurrentSession()
+        let data = WidgetDataReader.shared.readCurrentSession()
         let entry = CurrentSessionEntry(
             date: Date(),
             isActive: data.isActive,
@@ -30,7 +30,7 @@ struct CurrentSessionProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<CurrentSessionEntry>) -> Void) {
-        let data = WidgetManager.shared.readCurrentSession()
+        let data = WidgetDataReader.shared.readCurrentSession()
         let entry = CurrentSessionEntry(
             date: Date(),
             isActive: data.isActive,
@@ -142,12 +142,12 @@ struct TodaysFocusProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (TodaysFocusEntry) -> Void) {
-        let data = WidgetManager.shared.readTodaysFocus()
+        let data = WidgetDataReader.shared.readTodaysFocus()
         completion(TodaysFocusEntry(date: Date(), minutes: data.minutes, sessions: data.sessions, streak: data.streak))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<TodaysFocusEntry>) -> Void) {
-        let data = WidgetManager.shared.readTodaysFocus()
+        let data = WidgetDataReader.shared.readTodaysFocus()
         let entry = TodaysFocusEntry(date: Date(), minutes: data.minutes, sessions: data.sessions, streak: data.streak)
         let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: Date())!
         let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
@@ -216,5 +216,6 @@ struct PomoForgeWidgetBundle: WidgetBundle {
     var body: some Widget {
         CurrentSessionWidget()
         TodaysFocusWidget()
+        PomoForgeLiveActivity()
     }
 }

@@ -1,25 +1,10 @@
 // LiveActivityManager.swift
 // Manages Live Activities for the Lock Screen timer display
-// Requires ActivityKit and a Live Activity widget extension
+// PomoForgeTimerAttributes is defined in SharedTypes.swift
 
 import Foundation
 import ActivityKit
 import SwiftUI
-
-// MARK: - Live Activity Attributes
-
-struct PomoForgeTimerAttributes: ActivityAttributes {
-    public struct ContentState: Codable, Hashable {
-        var remainingSeconds: Int
-        var intervalType: String // "work", "break", "longBreak"
-        var workflowName: String
-        var intervalIndex: Int
-        var totalIntervals: Int
-        var endDate: Date
-    }
-
-    var workflowId: String
-}
 
 // MARK: - Live Activity Manager
 
