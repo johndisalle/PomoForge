@@ -1,0 +1,14 @@
+// !$*UTF8*$!
+// PomoForge Xcode Project
+// This is a placeholder project file. See SETUP.md for instructions
+// to create the project properly in Xcode.
+//
+// Due to the complexity of .pbxproj files, it is recommended to
+// create the project in Xcode using the step-by-step instructions below,
+// then add all the Swift files from this repository.
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	rootObject = "PLACEHOLDER";
+}

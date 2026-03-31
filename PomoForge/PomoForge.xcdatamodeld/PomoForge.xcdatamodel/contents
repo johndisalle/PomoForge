@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="23507" systemVersion="24A335" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithCloudKit="YES" userDefinedModelVersionIdentifier="">
+    <entity name="CDWorkflow" representedClassName="CDWorkflow" syncable="YES">
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="name" attributeType="String" defaultValueString="Untitled"/>
+        <attribute name="isDefault" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="intervalsData" attributeType="Binary"/>
+        <relationship name="sessions" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="CDSession" inverseName="workflow" inverseEntity="CDSession"/>
+    </entity>
+    <entity name="CDSession" representedClassName="CDSession" syncable="YES">
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="startedAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="endedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="totalFocusSeconds" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="totalBreakSeconds" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="completedIntervals" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="wasCompleted" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="workflowName" attributeType="String" defaultValueString=""/>
+        <relationship name="workflow" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="CDWorkflow" inverseName="sessions" inverseEntity="CDWorkflow"/>
+    </entity>
+    <entity name="CDFocusSessionShare" representedClassName="CDFocusSessionShare" syncable="YES">
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="ownerName" attributeType="String" defaultValueString=""/>
+        <attribute name="workflowName" attributeType="String" defaultValueString=""/>
+        <attribute name="currentIntervalType" attributeType="String" defaultValueString="work"/>
+        <attribute name="remainingSeconds" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="isActive" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="lastUpdated" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
+</model>
