@@ -291,6 +291,30 @@ class TimerManager: ObservableObject {
             }
         }
 
-        observers = [intervalObs, completedObs]
+        let countdownObs = NotificationCenter.default.addObserver(
+            forName: .countdownTick, object: nil, queue: .main
+        ) { [weak self] notification in
+            guard let self else { return }
+            let secondsLeft = notification.object as? Int ?? 0
+            Task { @MainActor in
+                // Escalating haptic intensity as countdown approaches zero
+                switch secondsLeft {
+                case 1:
+                    self.triggerHaptic(.heavy)
+                case 2:
+                    self.triggerHaptic(.heavy)
+                case 3:
+                    self.triggerHaptic(.medium)
+                case 4:
+                    self.triggerHaptic(.light)
+                case 5:
+                    self.triggerHaptic(.light)
+                default:
+                    break
+                }
+            }
+        }
+
+        observers = [intervalObs, completedObs, countdownObs]
     }
 }

@@ -21,6 +21,7 @@ struct TimerView: View {
 
     @State private var showResetConfirmation = false
     @State private var showCelebration = false
+    @State private var todayFocusMinutes = 0
     @State private var celebrationScale: CGFloat = 0.5
     @State private var celebrationOpacity: Double = 0
     @State private var showPaywall = false
@@ -36,7 +37,11 @@ struct TimerView: View {
                     .ignoresSafeArea()
 
                 VStack(spacing: 24) {
-                    workflowPicker
+                    HStack {
+                        workflowPicker
+                        Spacer()
+                        todayBadge
+                    }
                     Spacer()
                     intervalLabel
                     timerCircle
@@ -91,6 +96,7 @@ struct TimerView: View {
 
         // Cancel streak reminder since they completed a session today
         NotificationManager.shared.cancelStreakReminder()
+        loadTodayFocus()
 
         // Show celebration
         showCelebrationAnimation()
@@ -258,6 +264,37 @@ struct TimerView: View {
             endPoint: .bottom
         )
         .animation(.easeInOut(duration: 0.8), value: timerManager.engine.currentIntervalIndex)
+    }
+
+    // MARK: - Today Badge
+
+    private var todayBadge: some View {
+        let totalMinutes = todayFocusMinutes + (timerManager.engine.elapsedFocusSeconds / 60)
+        return HStack(spacing: 4) {
+            Image(systemName: "flame.fill")
+                .font(.caption2)
+                .foregroundStyle(.orange)
+            Text("\(totalMinutes)m today")
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.ultraThinMaterial, in: Capsule())
+        .onAppear { loadTodayFocus() }
+    }
+
+    private func loadTodayFocus() {
+        let request = NSFetchRequest<NSManagedObject>(entityName: "CDSession")
+        let today = Calendar.current.startOfDay(for: Date())
+        request.predicate = NSPredicate(format: "startedAt >= %@", today as NSDate)
+
+        if let results = try? viewContext.fetch(request) {
+            todayFocusMinutes = results.reduce(0) { total, obj in
+                total + Int((obj as AnyObject).value(forKey: "totalFocusSeconds") as? Int32 ?? 0)
+            } / 60
+        }
     }
 
     // MARK: - Workflow Picker

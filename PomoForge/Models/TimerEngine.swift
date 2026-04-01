@@ -143,6 +143,11 @@ class TimerEngine: ObservableObject {
                 case .shortBreak, .longBreak:
                     elapsedBreakSeconds += 1
                 }
+
+                // Haptic countdown for last 5 seconds of focus blocks
+                if interval.type == .work && remainingSeconds <= 5 && remainingSeconds > 0 {
+                    NotificationCenter.default.post(name: .countdownTick, object: remainingSeconds)
+                }
             }
         }
 
@@ -186,4 +191,5 @@ private class TickTarget {
 extension Notification.Name {
     static let intervalChanged = Notification.Name("pomoforge.intervalChanged")
     static let workflowCompleted = Notification.Name("pomoforge.workflowCompleted")
+    static let countdownTick = Notification.Name("pomoforge.countdownTick")
 }
