@@ -113,7 +113,7 @@ class SubscriptionManager: ObservableObject {
 
     func canCreateWorkflow(currentCount: Int) -> Bool {
         if tier == .pro { return true }
-        return currentCount < 1 // Free tier: 1 saved workflow (default)
+        return currentCount < 2 // Free tier: default + 1 custom workflow
     }
 }
 

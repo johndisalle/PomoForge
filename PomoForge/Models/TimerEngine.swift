@@ -97,10 +97,11 @@ class TimerEngine: ObservableObject {
 
     private func startTimer() {
         stopTimer()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+        let newTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.tick()
         }
-        RunLoop.current.add(timer!, forMode: .common)
+        RunLoop.current.add(newTimer, forMode: .common)
+        timer = newTimer
     }
 
     private func stopTimer() {

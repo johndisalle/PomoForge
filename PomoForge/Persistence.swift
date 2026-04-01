@@ -3,6 +3,7 @@
 
 import CoreData
 import CloudKit
+import Foundation
 
 struct PersistenceController {
     static let shared = PersistenceController()
@@ -57,17 +58,18 @@ struct PersistenceController {
                 workflow.setValue(Date(), forKey: "createdAt")
 
                 // Intervals stored as JSON: [{work: 1500, break: 300}] x4 + long break
-                let intervals: [[String: Any]] = [
-                    ["type": "work", "duration": 1500],
-                    ["type": "break", "duration": 300],
-                    ["type": "work", "duration": 1500],
-                    ["type": "break", "duration": 300],
-                    ["type": "work", "duration": 1500],
-                    ["type": "break", "duration": 300],
-                    ["type": "work", "duration": 1500],
-                    ["type": "longBreak", "duration": 900]
+                // Use Codable encoding to match the TimerInterval model exactly
+                let intervals: [TimerInterval] = [
+                    TimerInterval(type: .work, duration: 1500),
+                    TimerInterval(type: .shortBreak, duration: 300),
+                    TimerInterval(type: .work, duration: 1500),
+                    TimerInterval(type: .shortBreak, duration: 300),
+                    TimerInterval(type: .work, duration: 1500),
+                    TimerInterval(type: .shortBreak, duration: 300),
+                    TimerInterval(type: .work, duration: 1500),
+                    TimerInterval(type: .longBreak, duration: 900)
                 ]
-                let data = try JSONSerialization.data(withJSONObject: intervals)
+                let data = try JSONEncoder().encode(intervals)
                 workflow.setValue(data, forKey: "intervalsData")
 
                 try context.save()

@@ -9,6 +9,8 @@ struct TimerView: View {
     @Environment(\.managedObjectContext) private var viewContext
 
     @StateObject private var liveActivityManager = LiveActivityManager.shared
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var showResetConfirmation = false
 
     var body: some View {
         NavigationStack {
@@ -46,6 +48,31 @@ struct TimerView: View {
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase == .background && timerManager.engine.state == .running {
+                    // Update widget when app goes to background
+                    if let interval = timerManager.engine.currentInterval {
+                        WidgetManager.shared.updateCurrentSession(
+                            isActive: true,
+                            intervalType: interval.type.rawValue,
+                            remainingSeconds: timerManager.engine.remainingSeconds,
+                            workflowName: timerManager.selectedWorkflow?.name ?? "",
+                            endDate: Date().addingTimeInterval(TimeInterval(timerManager.engine.remainingSeconds))
+                        )
+                    }
+                    updateLiveActivity()
+                }
+                if newPhase == .inactive && timerManager.engine.state != .running {
+                    WidgetManager.shared.clearCurrentSession()
+                }
+            }
+            .onChange(of: timerManager.engine.state) { _, newState in
+                if newState == .completed {
+                    timerManager.saveCompletedSession(context: viewContext)
+                    WidgetManager.shared.clearCurrentSession()
+                    liveActivityManager.endActivity()
+                }
+            }
         }
     }
 
@@ -205,11 +232,13 @@ struct TimerView: View {
         HStack(spacing: 40) {
             // Reset
             Button(action: {
-                if timerManager.engine.elapsedFocusSeconds > 30 {
-                    timerManager.saveCompletedSession(context: viewContext)
+                if timerManager.engine.elapsedFocusSeconds > 60 {
+                    showResetConfirmation = true
+                } else {
+                    timerManager.resetTimer()
+                    liveActivityManager.endActivity()
+                    WidgetManager.shared.clearCurrentSession()
                 }
-                timerManager.resetTimer()
-                liveActivityManager.endActivity()
             }) {
                 Image(systemName: "arrow.counterclockwise")
                     .font(.title2)
@@ -219,6 +248,22 @@ struct TimerView: View {
             }
             .opacity(timerManager.engine.state == .idle ? 0.4 : 1)
             .disabled(timerManager.engine.state == .idle)
+            .alert("Reset Timer?", isPresented: $showResetConfirmation) {
+                Button("Save & Reset", role: .destructive) {
+                    timerManager.saveCompletedSession(context: viewContext)
+                    timerManager.resetTimer()
+                    liveActivityManager.endActivity()
+                    WidgetManager.shared.clearCurrentSession()
+                }
+                Button("Discard & Reset", role: .destructive) {
+                    timerManager.resetTimer()
+                    liveActivityManager.endActivity()
+                    WidgetManager.shared.clearCurrentSession()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("You have \(timerManager.engine.elapsedFocusSeconds / 60) minutes of focus time. Save this session?")
+            }
 
             // Play/Pause (main button)
             Button(action: {

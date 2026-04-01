@@ -114,22 +114,26 @@ class TimerManager: ObservableObject {
         isSessionActive = true
         engine.start()
         triggerHaptic(.heavy)
+        UIApplication.shared.isIdleTimerDisabled = true
     }
 
     func pauseTimer() {
         engine.pause()
         triggerHaptic(.medium)
+        UIApplication.shared.isIdleTimerDisabled = false
     }
 
     func resumeTimer() {
         engine.resume()
         triggerHaptic(.light)
+        UIApplication.shared.isIdleTimerDisabled = true
     }
 
     func resetTimer() {
         engine.reset()
         isSessionActive = false
         triggerHaptic(.rigid)
+        UIApplication.shared.isIdleTimerDisabled = false
     }
 
     func skipInterval() {
