@@ -44,6 +44,9 @@ struct SettingsView: View {
 
                 // About
                 aboutSection
+
+                // Legal & Support
+                legalSection
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Settings")
@@ -281,7 +284,11 @@ struct SettingsView: View {
         } header: {
             Text("About")
         }
+    }
 
+    // MARK: - Legal & Support Section
+
+    private var legalSection: some View {
         Section {
             Link(destination: URL(string: "https://johndisalle.github.io/PomoForge/privacy.html")!) {
                 HStack {
