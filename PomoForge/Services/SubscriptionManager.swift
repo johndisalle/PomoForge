@@ -1,10 +1,9 @@
 // SubscriptionManager.swift
 // RevenueCat integration for freemium subscription management
-// Add RevenueCat Purchases SDK 5.x via SPM before uncommenting
 
 import SwiftUI
 import Combine
-// import RevenueCat
+import RevenueCat
 
 // MARK: - Subscription Tier
 
@@ -36,21 +35,18 @@ class SubscriptionManager: ObservableObject {
     @Published var tier: SubscriptionTier = .free
     @Published var isLoading = false
 
-    // RevenueCat constants — replace with your actual IDs
-    static let apiKey = "YOUR_REVENUECAT_API_KEY"
+    static let apiKey = "appl_DRTuTMXavZhtAMjYIKSpGQVnsCa"
     static let monthlyProductId = "com.pomoforge.pro.monthly"    // $2.99/mo
     static let yearlyProductId = "com.pomoforge.pro.yearly"      // $24.99/yr
     static let entitlementId = "pro"
 
     init() {
-        // configureRevenueCat()
-        // checkSubscriptionStatus()
+        configureRevenueCat()
+        checkSubscriptionStatus()
     }
 
     // MARK: - RevenueCat Configuration
-    // Uncomment after adding RevenueCat SDK via SPM
 
-    /*
     func configureRevenueCat() {
         Purchases.logLevel = .debug
         Purchases.configure(withAPIKey: Self.apiKey)
@@ -100,15 +96,6 @@ class SubscriptionManager: ObservableObject {
         if customerInfo.entitlements[Self.entitlementId]?.isActive == true {
             tier = .pro
         }
-    }
-    */
-
-    // MARK: - Placeholder methods (work without RevenueCat)
-
-    func checkSubscriptionStatus() {
-        // Placeholder: defaults to free tier
-        // Replace with RevenueCat implementation above
-        tier = .free
     }
 
     func canCreateWorkflow(currentCount: Int) -> Bool {
