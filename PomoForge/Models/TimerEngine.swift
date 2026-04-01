@@ -3,6 +3,7 @@
 
 import Foundation
 import Combine
+import UIKit
 
 enum TimerState: Equatable {
     case idle
