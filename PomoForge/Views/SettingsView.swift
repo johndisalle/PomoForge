@@ -281,6 +281,63 @@ struct SettingsView: View {
         } header: {
             Text("About")
         }
+
+        Section {
+            Link(destination: URL(string: "https://johndisalle.github.io/PomoForge/privacy.html")!) {
+                HStack {
+                    Image(systemName: "hand.raised.fill")
+                        .foregroundStyle(.blue)
+                        .frame(width: 24)
+                    Text("Privacy Policy")
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Image(systemName: "arrow.up.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            Link(destination: URL(string: "https://johndisalle.github.io/PomoForge/terms.html")!) {
+                HStack {
+                    Image(systemName: "doc.text.fill")
+                        .foregroundStyle(.gray)
+                        .frame(width: 24)
+                    Text("Terms of Service")
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Image(systemName: "arrow.up.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            Link(destination: URL(string: "https://johndisalle.github.io/PomoForge/support.html")!) {
+                HStack {
+                    Image(systemName: "questionmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .frame(width: 24)
+                    Text("Support & FAQ")
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Image(systemName: "arrow.up.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            Link(destination: URL(string: "mailto:johntdisalle@outlook.com")!) {
+                HStack {
+                    Image(systemName: "envelope.fill")
+                        .foregroundStyle(.orange)
+                        .frame(width: 24)
+                    Text("Contact Us")
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Image(systemName: "arrow.up.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        } header: {
+            Text("Legal & Support")
+        }
     }
 }
 
