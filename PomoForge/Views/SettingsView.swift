@@ -2,6 +2,7 @@
 // Sound picker, themes, CloudKit toggle, subscription management
 
 import SwiftUI
+import StoreKit
 
 struct SettingsView: View {
     @EnvironmentObject var timerManager: TimerManager
@@ -18,6 +19,7 @@ struct SettingsView: View {
 
     @State private var showingPaywall = false
     @State private var reminderTime = Date()
+    @Environment(\.requestReview) private var requestReview
 
     var body: some View {
         NavigationStack {
@@ -261,6 +263,14 @@ struct SettingsView: View {
                 Spacer()
                 Text("1.0.0")
                     .foregroundStyle(.secondary)
+            }
+            Button(action: { requestReview() }) {
+                HStack {
+                    Image(systemName: "star.fill")
+                        .foregroundStyle(.yellow)
+                    Text("Review PomoForge")
+                        .foregroundStyle(.primary)
+                }
             }
             Button("Restore Purchases") {
                 Task {
