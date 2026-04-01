@@ -1,5 +1,5 @@
 // TimerEngine.swift
-// Pure timer state machine — no UI dependencies
+// Pure timer state machine with reliable main-thread updates
 
 import Foundation
 import Combine
@@ -11,6 +11,7 @@ enum TimerState: Equatable {
     case completed
 }
 
+@MainActor
 class TimerEngine: ObservableObject {
     @Published var state: TimerState = .idle
     @Published var remainingSeconds: Int = 0
@@ -18,7 +19,9 @@ class TimerEngine: ObservableObject {
     @Published var elapsedFocusSeconds: Int = 0
     @Published var elapsedBreakSeconds: Int = 0
 
-    private var timer: Timer?
+    private var displayLink: CADisplayLink?
+    private var lastTickTime: Date?
+    private var accumulatedTime: TimeInterval = 0
     private(set) var intervals: [TimerInterval] = []
 
     var currentInterval: TimerInterval? {
@@ -62,26 +65,28 @@ class TimerEngine: ObservableObject {
             currentIntervalIndex = 0
             elapsedFocusSeconds = 0
             elapsedBreakSeconds = 0
-            remainingSeconds = intervals.first?.duration ?? 0
+            if let first = intervals.first {
+                remainingSeconds = first.duration
+            }
         }
         state = .running
-        startTimer()
+        startTicking()
     }
 
     func pause() {
         guard state == .running else { return }
         state = .paused
-        stopTimer()
+        stopTicking()
     }
 
     func resume() {
         guard state == .paused else { return }
         state = .running
-        startTimer()
+        startTicking()
     }
 
     func reset() {
-        stopTimer()
+        stopTicking()
         state = .idle
         currentIntervalIndex = 0
         elapsedFocusSeconds = 0
@@ -93,29 +98,43 @@ class TimerEngine: ObservableObject {
         advanceToNextInterval()
     }
 
-    // MARK: - Timer Loop
+    // MARK: - Reliable Timer using CADisplayLink
 
-    private func startTimer() {
-        stopTimer()
-        let newTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.tick()
-        }
-        RunLoop.current.add(newTimer, forMode: .common)
-        timer = newTimer
+    private func startTicking() {
+        stopTicking()
+        accumulatedTime = 0
+        lastTickTime = Date()
+
+        let link = CADisplayLink(target: TickTarget(engine: self), selector: #selector(TickTarget.tick))
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 1, maximum: 15, preferred: 2)
+        link.add(to: .main, forMode: .common)
+        displayLink = link
     }
 
-    private func stopTimer() {
-        timer?.invalidate()
-        timer = nil
+    private func stopTicking() {
+        displayLink?.invalidate()
+        displayLink = nil
+        lastTickTime = nil
+        accumulatedTime = 0
     }
 
-    private func tick() {
+    fileprivate func handleTick() {
         guard state == .running else { return }
 
-        if remainingSeconds > 0 {
+        let now = Date()
+        guard let last = lastTickTime else {
+            lastTickTime = now
+            return
+        }
+
+        accumulatedTime += now.timeIntervalSince(last)
+        lastTickTime = now
+
+        // Process whole seconds
+        while accumulatedTime >= 1.0 && remainingSeconds > 0 {
+            accumulatedTime -= 1.0
             remainingSeconds -= 1
 
-            // Track elapsed time by type
             if let interval = currentInterval {
                 switch interval.type {
                 case .work:
@@ -127,6 +146,7 @@ class TimerEngine: ObservableObject {
         }
 
         if remainingSeconds == 0 {
+            accumulatedTime = 0
             advanceToNextInterval()
         }
     }
@@ -136,12 +156,26 @@ class TimerEngine: ObservableObject {
         if nextIndex < intervals.count {
             currentIntervalIndex = nextIndex
             remainingSeconds = intervals[nextIndex].duration
-            // Post notification for interval change (haptics, sound)
             NotificationCenter.default.post(name: .intervalChanged, object: currentInterval)
         } else {
             state = .completed
-            stopTimer()
+            stopTicking()
             NotificationCenter.default.post(name: .workflowCompleted, object: nil)
+        }
+    }
+}
+
+// CADisplayLink target (avoids retain cycle)
+private class TickTarget {
+    weak var engine: TimerEngine?
+
+    init(engine: TimerEngine) {
+        self.engine = engine
+    }
+
+    @objc func tick() {
+        Task { @MainActor in
+            engine?.handleTick()
         }
     }
 }

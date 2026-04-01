@@ -16,6 +16,7 @@ class TimerManager: ObservableObject {
     private var audioPlayer: AVAudioPlayer?
     private var sessionStartTime: Date?
     private var observers: [NSObjectProtocol] = []
+    private var engineCancellable: AnyCancellable?
 
     // Settings
     @AppStorage("selectedSound") var selectedSound: String = "bell"
@@ -24,6 +25,11 @@ class TimerManager: ObservableObject {
     init() {
         setupObservers()
         setupAudioSession()
+
+        // Forward engine changes to trigger SwiftUI view updates
+        engineCancellable = engine.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
     }
 
     deinit {
