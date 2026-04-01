@@ -3,6 +3,7 @@
 // Target: iOS 18.0+, SwiftUI, Xcode 16
 
 import SwiftUI
+import CoreData
 
 @main
 struct PomoForgeApp: App {
