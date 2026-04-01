@@ -13,12 +13,16 @@ struct WorkflowListView: View {
     @State private var editingWorkflow: Workflow?
     @State private var showingPaywall = false
     @State private var workflowToDelete: Workflow?
+    var switchToTimerTab: () -> Void = {}
 
     var body: some View {
         NavigationStack {
             List {
                 ForEach(timerManager.workflows) { workflow in
-                    WorkflowRow(workflow: workflow)
+                    WorkflowRow(workflow: workflow, onPlay: {
+                        timerManager.selectWorkflow(workflow)
+                        switchToTimerTab()
+                    })
                         .contentShape(Rectangle())
                         .onTapGesture {
                             editingWorkflow = workflow
@@ -105,6 +109,7 @@ struct WorkflowListView: View {
 
 struct WorkflowRow: View {
     let workflow: Workflow
+    var onPlay: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -122,6 +127,15 @@ struct WorkflowRow: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(Color.orange.opacity(0.15), in: Capsule())
+                }
+
+                if let onPlay {
+                    Button(action: onPlay) {
+                        Image(systemName: "play.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(.orange)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
 

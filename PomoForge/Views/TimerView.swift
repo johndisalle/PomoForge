@@ -1,19 +1,33 @@
 // TimerView.swift
-// Main countdown screen with circular progress, workflow selector, Live Activity support
+// Main countdown screen with themes, paywall triggers, rate prompt
 
 import SwiftUI
+import StoreKit
+import CoreData
 
 struct TimerView: View {
     @EnvironmentObject var timerManager: TimerManager
     @EnvironmentObject var subscriptionManager: SubscriptionManager
     @Environment(\.managedObjectContext) private var viewContext
+    @Environment(\.requestReview) private var requestReview
 
     @StateObject private var liveActivityManager = LiveActivityManager.shared
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("selectedTheme") private var selectedTheme = "dark"
+    @AppStorage("totalCompletedSessions") private var totalCompletedSessions = 0
+    @AppStorage("hasSeenFirstSessionPaywall") private var hasSeenFirstSessionPaywall = false
+    @AppStorage("hasSeenThirdSessionPaywall") private var hasSeenThirdSessionPaywall = false
+    @AppStorage("hasBeenAskedToRate") private var hasBeenAskedToRate = false
+
     @State private var showResetConfirmation = false
     @State private var showCelebration = false
     @State private var celebrationScale: CGFloat = 0.5
     @State private var celebrationOpacity: Double = 0
+    @State private var showPaywall = false
+
+    private var theme: AppThemeColors {
+        AppThemeColors.forTheme(selectedTheme)
+    }
 
     var body: some View {
         NavigationStack {
@@ -23,35 +37,27 @@ struct TimerView: View {
 
                 VStack(spacing: 24) {
                     workflowPicker
-
                     Spacer()
-
                     intervalLabel
-
                     timerCircle
-
-                    // Next up indicator
                     nextUpLabel
-
                     timeDisplay
-
                     intervalDots
-
                     Spacer()
-
                     controlButtons
-
                     Spacer().frame(height: 20)
                 }
                 .padding()
 
-                // Celebration overlay
                 if showCelebration {
                     celebrationOverlay
                 }
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $showPaywall) {
+                PaywallView()
+            }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .background && timerManager.engine.state == .running {
                     if let interval = timerManager.engine.currentInterval {
@@ -71,12 +77,92 @@ struct TimerView: View {
             }
             .onChange(of: timerManager.engine.state) { _, newState in
                 if newState == .completed {
-                    showCelebrationAnimation()
-                    WidgetManager.shared.clearCurrentSession()
-                    liveActivityManager.endActivity()
+                    handleSessionComplete()
                 }
             }
         }
+    }
+
+    // MARK: - Session Complete (paywall triggers, rate prompt, streak)
+
+    private func handleSessionComplete() {
+        totalCompletedSessions += 1
+        timerManager.saveCompletedSession(context: viewContext)
+
+        // Cancel streak reminder since they completed a session today
+        NotificationManager.shared.cancelStreakReminder()
+
+        // Show celebration
+        showCelebrationAnimation()
+
+        // Schedule streak reminder for tomorrow
+        let streak = calculateCurrentStreak()
+        if streak > 0 {
+            NotificationManager.shared.scheduleStreakReminder(currentStreak: streak)
+        }
+    }
+
+    private func dismissCelebration() {
+        timerManager.resetTimer()
+        WidgetManager.shared.clearCurrentSession()
+        liveActivityManager.endActivity()
+
+        withAnimation(.easeOut(duration: 0.2)) {
+            celebrationOpacity = 0
+            celebrationScale = 0.8
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            showCelebration = false
+            celebrationScale = 0.5
+
+            // Strategic paywall & rate triggers (after celebration dismisses)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                triggerPostSessionActions()
+            }
+        }
+    }
+
+    private func triggerPostSessionActions() {
+        // Don't show anything to Pro users except rate prompt
+        if subscriptionManager.tier == .free {
+            // After 1st session
+            if totalCompletedSessions == 1 && !hasSeenFirstSessionPaywall {
+                hasSeenFirstSessionPaywall = true
+                showPaywall = true
+                return
+            }
+            // After 3rd session
+            if totalCompletedSessions == 3 && !hasSeenThirdSessionPaywall {
+                hasSeenThirdSessionPaywall = true
+                showPaywall = true
+                return
+            }
+        }
+
+        // Rate prompt: after 3rd or 5th completed session
+        if !hasBeenAskedToRate && (totalCompletedSessions == 3 || totalCompletedSessions == 5) {
+            hasBeenAskedToRate = true
+            requestReview()
+        }
+    }
+
+    private func calculateCurrentStreak() -> Int {
+        let request = NSFetchRequest<NSManagedObject>(entityName: "CDSession")
+        request.sortDescriptors = [NSSortDescriptor(key: "startedAt", ascending: false)]
+
+        guard let results = try? viewContext.fetch(request) else { return 0 }
+        let sessions = results.compactMap { ($0 as AnyObject).value(forKey: "startedAt") as? Date }
+
+        let calendar = Calendar.current
+        var streak = 0
+        var checkDate = calendar.startOfDay(for: Date())
+        let daySet = Set(sessions.map { calendar.startOfDay(for: $0) })
+
+        while daySet.contains(checkDate) {
+            streak += 1
+            checkDate = calendar.date(byAdding: .day, value: -1, to: checkDate)!
+        }
+        return streak
     }
 
     // MARK: - Celebration Overlay
@@ -85,15 +171,12 @@ struct TimerView: View {
         ZStack {
             Color.black.opacity(0.7)
                 .ignoresSafeArea()
-                .onTapGesture {
-                    dismissCelebration()
-                }
+                .onTapGesture { dismissCelebration() }
 
             VStack(spacing: 20) {
-                // Animated checkmark
                 Image(systemName: "checkmark.seal.fill")
                     .font(.system(size: 80))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(theme.accent)
                     .symbolEffect(.bounce, value: showCelebration)
 
                 Text("Workflow Complete!")
@@ -104,7 +187,6 @@ struct TimerView: View {
                     .font(.title3)
                     .foregroundStyle(.secondary)
 
-                // Stats
                 HStack(spacing: 32) {
                     VStack(spacing: 4) {
                         Text("\(timerManager.engine.elapsedFocusSeconds / 60)")
@@ -123,13 +205,28 @@ struct TimerView: View {
                 }
                 .padding(.top, 8)
 
+                // Streak badge
+                let streak = calculateCurrentStreak()
+                if streak > 1 {
+                    HStack(spacing: 6) {
+                        Image(systemName: "bolt.fill")
+                            .foregroundStyle(.yellow)
+                        Text("\(streak)-day streak!")
+                            .fontWeight(.semibold)
+                    }
+                    .font(.subheadline)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.yellow.opacity(0.15), in: Capsule())
+                }
+
                 Button(action: { dismissCelebration() }) {
                     Text("Done")
                         .font(.headline)
                         .foregroundStyle(.white)
                         .frame(width: 200)
                         .padding(.vertical, 14)
-                        .background(.orange, in: RoundedRectangle(cornerRadius: 14))
+                        .background(theme.accent, in: RoundedRectangle(cornerRadius: 14))
                 }
                 .padding(.top, 12)
             }
@@ -146,34 +243,17 @@ struct TimerView: View {
         }
     }
 
-    private func dismissCelebration() {
-        timerManager.saveCompletedSession(context: viewContext)
-        timerManager.resetTimer()
-        withAnimation(.easeOut(duration: 0.2)) {
-            celebrationOpacity = 0
-            celebrationScale = 0.8
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            showCelebration = false
-            celebrationScale = 0.5
-        }
-    }
-
-    // MARK: - Background
+    // MARK: - Background (themed)
 
     private var backgroundGradient: some View {
         let color: Color = {
             guard let interval = timerManager.engine.currentInterval,
                   timerManager.engine.state != .idle else { return .clear }
-            switch interval.type {
-            case .work: return Color.orange.opacity(0.08)
-            case .shortBreak: return Color.green.opacity(0.08)
-            case .longBreak: return Color.blue.opacity(0.08)
-            }
+            return theme.gradientForInterval(interval.type)
         }()
 
         return LinearGradient(
-            colors: [color, .black],
+            colors: [color, theme.background],
             startPoint: .top,
             endPoint: .bottom
         )
@@ -224,7 +304,7 @@ struct TimerView: View {
             .animation(.easeInOut, value: timerManager.engine.currentIntervalIndex)
     }
 
-    // MARK: - Timer Circle
+    // MARK: - Timer Circle (themed)
 
     private var timerCircle: some View {
         ZStack {
@@ -312,7 +392,7 @@ struct TimerView: View {
         }
     }
 
-    // MARK: - Interval Progress Dots
+    // MARK: - Interval Dots
 
     private var intervalDots: some View {
         HStack(spacing: 6) {
@@ -386,7 +466,6 @@ struct TimerView: View {
                 case .paused:
                     timerManager.resumeTimer()
                 case .completed:
-                    // Handled by celebration overlay
                     break
                 }
             }) {
@@ -424,26 +503,24 @@ struct TimerView: View {
         }
     }
 
-    // MARK: - Colors
+    // MARK: - Colors (themed)
 
     private var intervalColor: Color {
-        guard let interval = timerManager.engine.currentInterval else { return .orange }
+        guard let interval = timerManager.engine.currentInterval else { return theme.accent }
         switch interval.type {
-        case .work: return .orange
+        case .work: return theme.accent
         case .shortBreak: return .green
         case .longBreak: return .blue
         }
     }
 
-    // MARK: - Live Activity Helpers
+    // MARK: - Live Activity
 
     private func startLiveActivity() {
         guard let workflow = timerManager.selectedWorkflow,
               let interval = timerManager.engine.currentInterval else { return }
-
         liveActivityManager.startActivity(
-            workflowName: workflow.name,
-            workflowId: workflow.id,
+            workflowName: workflow.name, workflowId: workflow.id,
             remainingSeconds: timerManager.engine.remainingSeconds,
             intervalType: interval.type.rawValue,
             intervalIndex: timerManager.engine.currentIntervalIndex,
@@ -454,11 +531,9 @@ struct TimerView: View {
     private func updateLiveActivity() {
         guard let workflow = timerManager.selectedWorkflow,
               let interval = timerManager.engine.currentInterval else { return }
-
         liveActivityManager.updateActivity(
             remainingSeconds: timerManager.engine.remainingSeconds,
-            intervalType: interval.type.rawValue,
-            workflowName: workflow.name,
+            intervalType: interval.type.rawValue, workflowName: workflow.name,
             intervalIndex: timerManager.engine.currentIntervalIndex,
             totalIntervals: timerManager.engine.intervals.count
         )

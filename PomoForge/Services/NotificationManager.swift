@@ -1,5 +1,5 @@
 // NotificationManager.swift
-// Local notifications for interval changes and workflow completion
+// Local notifications for intervals, daily reminders, and streak protection
 
 import Foundation
 import UserNotifications
@@ -15,40 +15,11 @@ class NotificationManager {
         }
     }
 
-    // Schedule a notification for when the current interval ends
-    func scheduleIntervalEnd(in seconds: Int, intervalType: IntervalType, nextIntervalType: IntervalType?) {
-        removeAllPending()
+    // MARK: - Interval Notifications
 
-        let content = UNMutableNotificationContent()
-
-        switch intervalType {
-        case .work:
-            content.title = "Focus Complete"
-            if let next = nextIntervalType {
-                content.body = next == .longBreak ? "Great work! Time for a long break." : "Nice focus session! Take a break."
-            } else {
-                content.body = "Workflow complete! You crushed it."
-            }
-        case .shortBreak:
-            content.title = "Break Over"
-            content.body = "Ready to focus? Let's go."
-        case .longBreak:
-            content.title = "Long Break Over"
-            content.body = "Feeling refreshed? Time to get back to it."
-        }
-
-        content.sound = .default
-        content.interruptionLevel = .timeSensitive
-
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(max(seconds, 1)), repeats: false)
-        let request = UNNotificationRequest(identifier: "pomoforge.interval", content: content, trigger: trigger)
-
-        UNUserNotificationCenter.current().add(request)
-    }
-
-    // Schedule all upcoming interval notifications for the entire workflow
     func scheduleAllIntervals(intervals: [TimerInterval], startingFrom index: Int, currentRemaining: Int) {
-        removeAllPending()
+        // Only remove interval-specific notifications, not daily reminders
+        removePending(withPrefix: "pomoforge.interval")
 
         var cumulativeSeconds = currentRemaining
 
@@ -83,24 +54,74 @@ class NotificationManager {
 
             UNUserNotificationCenter.current().add(request)
 
-            // Add next interval's duration
             if i + 1 < intervals.count {
                 cumulativeSeconds += intervals[i + 1].duration
             }
         }
     }
 
-    func scheduleWorkflowComplete(in seconds: Int, workflowName: String) {
-        let content = UNMutableNotificationContent()
-        content.title = "Workflow Complete!"
-        content.body = "\(workflowName) finished. Amazing focus session!"
-        content.sound = .default
-        content.interruptionLevel = .timeSensitive
+    // MARK: - Daily Reminder
 
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(max(seconds, 1)), repeats: false)
-        let request = UNNotificationRequest(identifier: "pomoforge.complete", content: content, trigger: trigger)
+    func scheduleDailyReminder(at hour: Int, minute: Int) {
+        removePending(withPrefix: "pomoforge.daily")
+
+        let content = UNMutableNotificationContent()
+        content.title = "Time to Focus"
+        content.body = "Your focus session is waiting. Even 25 minutes makes a difference."
+        content.sound = .default
+
+        var dateComponents = DateComponents()
+        dateComponents.hour = hour
+        dateComponents.minute = minute
+
+        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
+        let request = UNNotificationRequest(identifier: "pomoforge.daily.reminder", content: content, trigger: trigger)
 
         UNUserNotificationCenter.current().add(request)
+    }
+
+    func removeDailyReminder() {
+        removePending(withPrefix: "pomoforge.daily")
+    }
+
+    // MARK: - Streak Protection
+
+    func scheduleStreakReminder(currentStreak: Int) {
+        removePending(withPrefix: "pomoforge.streak")
+
+        guard currentStreak > 0 else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Don't Break Your Streak!"
+        if currentStreak >= 7 {
+            content.body = "You've focused \(currentStreak) days in a row — that's incredible. Keep it alive today!"
+        } else {
+            content.body = "You're on a \(currentStreak)-day streak. Complete one session to keep it going!"
+        }
+        content.sound = .default
+
+        // Schedule for 8 PM today if no session completed
+        var dateComponents = DateComponents()
+        dateComponents.hour = 20
+        dateComponents.minute = 0
+
+        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
+        let request = UNNotificationRequest(identifier: "pomoforge.streak.reminder", content: content, trigger: trigger)
+
+        UNUserNotificationCenter.current().add(request)
+    }
+
+    func cancelStreakReminder() {
+        removePending(withPrefix: "pomoforge.streak")
+    }
+
+    // MARK: - Cleanup
+
+    func removePending(withPrefix prefix: String) {
+        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+            let ids = requests.filter { $0.identifier.hasPrefix(prefix) }.map { $0.identifier }
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
+        }
     }
 
     func removeAllPending() {

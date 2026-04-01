@@ -17,7 +17,7 @@ struct ContentView: View {
                 }
                 .tag(0)
 
-            WorkflowListView()
+            WorkflowListView(switchToTimerTab: { selectedTab = 0 })
                 .tabItem {
                     Label("Workflows", systemImage: "list.bullet.rectangle")
                 }

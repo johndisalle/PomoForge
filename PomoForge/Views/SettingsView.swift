@@ -12,14 +12,21 @@ struct SettingsView: View {
     @AppStorage("cloudKitSyncEnabled") private var cloudKitSyncEnabled = false
     @AppStorage("selectedTheme") private var selectedTheme = "dark"
     @AppStorage("showFamilySharing") private var showFamilySharing = false
+    @AppStorage("dailyReminderEnabled") private var dailyReminderEnabled = false
+    @AppStorage("dailyReminderHour") private var dailyReminderHour = 9
+    @AppStorage("dailyReminderMinute") private var dailyReminderMinute = 0
 
     @State private var showingPaywall = false
+    @State private var reminderTime = Date()
 
     var body: some View {
         NavigationStack {
             List {
                 // Subscription
                 subscriptionSection
+
+                // Daily reminder
+                reminderSection
 
                 // Timer sounds
                 soundsSection
@@ -75,6 +82,42 @@ struct SettingsView: View {
             }
         } header: {
             Text("Subscription")
+        }
+    }
+
+    // MARK: - Reminder Section
+
+    private var reminderSection: some View {
+        Section {
+            Toggle("Daily Reminder", isOn: $dailyReminderEnabled)
+                .tint(.orange)
+                .onChange(of: dailyReminderEnabled) { _, enabled in
+                    if enabled {
+                        NotificationManager.shared.scheduleDailyReminder(at: dailyReminderHour, minute: dailyReminderMinute)
+                    } else {
+                        NotificationManager.shared.removeDailyReminder()
+                    }
+                }
+
+            if dailyReminderEnabled {
+                DatePicker("Remind at", selection: $reminderTime, displayedComponents: .hourAndMinute)
+                    .onChange(of: reminderTime) { _, newValue in
+                        let components = Calendar.current.dateComponents([.hour, .minute], from: newValue)
+                        dailyReminderHour = components.hour ?? 9
+                        dailyReminderMinute = components.minute ?? 0
+                        NotificationManager.shared.scheduleDailyReminder(at: dailyReminderHour, minute: dailyReminderMinute)
+                    }
+                    .onAppear {
+                        var components = DateComponents()
+                        components.hour = dailyReminderHour
+                        components.minute = dailyReminderMinute
+                        reminderTime = Calendar.current.date(from: components) ?? Date()
+                    }
+            }
+        } header: {
+            Text("Reminders")
+        } footer: {
+            Text("Get a gentle nudge to start your daily focus session.")
         }
     }
 

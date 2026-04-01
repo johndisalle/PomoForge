@@ -1,5 +1,5 @@
 // HistoryView.swift
-// Session history with SwiftUI Charts, streak counter, CSV export
+// Session history with Today section, Charts, streak counter, CSV export
 
 import SwiftUI
 import Charts
@@ -19,13 +19,9 @@ struct HistoryView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
-                    // Summary cards
                     summaryCards
-
-                    // Chart section
+                    todaySection
                     chartSection
-
-                    // Session list
                     sessionList
                 }
                 .padding()
@@ -54,6 +50,7 @@ struct HistoryView: View {
                 }
             }
             .onAppear { loadSessions() }
+            .refreshable { loadSessions() }
         }
     }
 
@@ -64,7 +61,7 @@ struct HistoryView: View {
             SummaryCard(
                 title: "Today",
                 value: "\(todayFocusMinutes)m",
-                subtitle: "focus time",
+                subtitle: "\(todaySessions.count) session\(todaySessions.count == 1 ? "" : "s")",
                 icon: "flame.fill",
                 color: .orange
             )
@@ -78,11 +75,51 @@ struct HistoryView: View {
             SummaryCard(
                 title: "Total",
                 value: totalFormatted,
-                subtitle: "all time",
+                subtitle: "\(sessions.count) sessions",
                 icon: "chart.bar.fill",
                 color: .blue
             )
         }
+    }
+
+    // MARK: - Today Section
+
+    private var todaySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Today")
+                    .font(.headline)
+                Spacer()
+                if todayFocusMinutes > 0 {
+                    Text("\(todayFocusMinutes) min focused")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .fontWeight(.medium)
+                }
+            }
+
+            if todaySessions.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "sunrise.fill")
+                        .font(.title2)
+                        .foregroundStyle(.orange.opacity(0.5))
+                    Text("No sessions today yet")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Text("Start your first focus session!")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+            } else {
+                ForEach(todaySessions) { session in
+                    SessionRow(session: session)
+                }
+            }
+        }
+        .padding()
+        .background(.background, in: RoundedRectangle(cornerRadius: 16))
     }
 
     // MARK: - Chart Section
@@ -103,37 +140,50 @@ struct HistoryView: View {
             }
 
             if subscriptionManager.tier == .pro || chartRange == .week {
-                Chart(chartData, id: \.date) { item in
-                    BarMark(
-                        x: .value("Date", item.date, unit: .day),
-                        y: .value("Minutes", item.minutes)
-                    )
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.orange, .orange.opacity(0.6)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .cornerRadius(4)
-                }
-                .frame(height: 180)
-                .chartXAxis {
-                    AxisMarks(values: .stride(by: .day)) { value in
-                        AxisValueLabel(format: chartRange == .week ? .dateTime.weekday(.abbreviated) : .dateTime.day())
+                if chartData.allSatisfy({ $0.minutes == 0 }) {
+                    // Empty chart state
+                    VStack(spacing: 8) {
+                        Image(systemName: "chart.bar.fill")
+                            .font(.title)
+                            .foregroundStyle(.tertiary)
+                        Text("Complete sessions to see your chart")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                }
-                .chartYAxis {
-                    AxisMarks { value in
-                        AxisValueLabel {
-                            if let minutes = value.as(Int.self) {
-                                Text("\(minutes)m")
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 180)
+                } else {
+                    Chart(chartData, id: \.date) { item in
+                        BarMark(
+                            x: .value("Date", item.date, unit: .day),
+                            y: .value("Minutes", item.minutes)
+                        )
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.orange, .orange.opacity(0.6)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .cornerRadius(4)
+                    }
+                    .frame(height: 180)
+                    .chartXAxis {
+                        AxisMarks(values: .stride(by: .day)) { _ in
+                            AxisValueLabel(format: chartRange == .week ? .dateTime.weekday(.abbreviated) : .dateTime.day())
+                        }
+                    }
+                    .chartYAxis {
+                        AxisMarks { value in
+                            AxisValueLabel {
+                                if let minutes = value.as(Int.self) {
+                                    Text("\(minutes)m")
+                                }
                             }
                         }
                     }
                 }
             } else {
-                // Locked chart for free users beyond weekly view
                 ZStack {
                     RoundedRectangle(cornerRadius: 12)
                         .fill(.ultraThinMaterial)
@@ -154,14 +204,15 @@ struct HistoryView: View {
         .background(.background, in: RoundedRectangle(cornerRadius: 16))
     }
 
-    // MARK: - Session List
+    // MARK: - Earlier Sessions List
 
     private var sessionList: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Recent Sessions")
+            Text("Earlier")
                 .font(.headline)
 
-            if sessions.isEmpty {
+            let earlier = earlierSessions
+            if earlier.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "flame.fill")
                         .font(.system(size: 40))
@@ -176,7 +227,7 @@ struct HistoryView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 40)
             } else {
-                ForEach(sessions.prefix(50)) { session in
+                ForEach(earlier.prefix(50)) { session in
                     SessionRow(session: session)
                 }
             }
@@ -187,18 +238,24 @@ struct HistoryView: View {
 
     // MARK: - Data
 
-    private var todayFocusMinutes: Int {
+    private var todaySessions: [FocusSession] {
         let today = Calendar.current.startOfDay(for: Date())
-        return sessions
-            .filter { $0.startedAt >= today }
-            .reduce(0) { $0 + Int($1.totalFocusSeconds) } / 60
+        return sessions.filter { $0.startedAt >= today }
+    }
+
+    private var earlierSessions: [FocusSession] {
+        let today = Calendar.current.startOfDay(for: Date())
+        return sessions.filter { $0.startedAt < today }
+    }
+
+    private var todayFocusMinutes: Int {
+        todaySessions.reduce(0) { $0 + Int($1.totalFocusSeconds) } / 60
     }
 
     private var currentStreak: Int {
         let calendar = Calendar.current
         var streak = 0
         var checkDate = calendar.startOfDay(for: Date())
-
         let daySet = Set(sessions.map { calendar.startOfDay(for: $0.startedAt) })
 
         while daySet.contains(checkDate) {
@@ -215,7 +272,7 @@ struct HistoryView: View {
     private var totalFormatted: String {
         let totalMinutes = sessions.reduce(0) { $0 + Int($1.totalFocusSeconds) } / 60
         if totalMinutes >= 60 {
-            return "\(totalMinutes / 60)h"
+            return "\(totalMinutes / 60)h \(totalMinutes % 60)m"
         }
         return "\(totalMinutes)m"
     }
@@ -262,9 +319,6 @@ struct HistoryView: View {
             print("Failed to load sessions: \(error)")
         }
 
-        // Update widget data
-        let today = Calendar.current.startOfDay(for: Date())
-        let todaySessions = sessions.filter { $0.startedAt >= today }
         WidgetManager.shared.updateTodaysFocus(
             minutes: todayFocusMinutes,
             sessions: todaySessions.count,
@@ -305,8 +359,6 @@ enum ChartRange: String, CaseIterable, Identifiable {
     }
 }
 
-// MARK: - Summary Card
-
 struct SummaryCard: View {
     let title: String
     let value: String
@@ -336,8 +388,6 @@ struct SummaryCard: View {
         .background(.background, in: RoundedRectangle(cornerRadius: 12))
     }
 }
-
-// MARK: - Session Row
 
 struct SessionRow: View {
     let session: FocusSession
@@ -375,8 +425,6 @@ struct SessionRow: View {
         .padding(.vertical, 4)
     }
 }
-
-// MARK: - Share Sheet (UIKit bridge)
 
 struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]
