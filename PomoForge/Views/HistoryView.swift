@@ -162,13 +162,16 @@ struct HistoryView: View {
                 .font(.headline)
 
             if sessions.isEmpty {
-                VStack(spacing: 8) {
-                    Image(systemName: "clock.arrow.circlepath")
-                        .font(.largeTitle)
-                        .foregroundStyle(.tertiary)
-                    Text("No sessions yet")
+                VStack(spacing: 12) {
+                    Image(systemName: "flame.fill")
+                        .font(.system(size: 40))
+                        .foregroundStyle(.orange.opacity(0.4))
+                    Text("Your first session awaits")
+                        .font(.headline)
+                    Text("Complete a focus session and your\nhistory will appear here.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 40)

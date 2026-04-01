@@ -23,10 +23,22 @@ class TimerManager: ObservableObject {
 
     init() {
         setupObservers()
+        setupAudioSession()
     }
 
     deinit {
         observers.forEach { NotificationCenter.default.removeObserver($0) }
+    }
+
+    // MARK: - Audio Session (plays sound even when backgrounded)
+
+    private func setupAudioSession() {
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            print("Audio session setup failed: \(error)")
+        }
     }
 
     // MARK: - Workflow Management
@@ -39,7 +51,6 @@ class TimerManager: ObservableObject {
             let results = try context.fetch(request)
             workflows = results.compactMap { Workflow.from(managedObject: $0) }
 
-            // Select first workflow if none selected
             if selectedWorkflow == nil, let first = workflows.first {
                 selectWorkflow(first)
             }
@@ -115,18 +126,33 @@ class TimerManager: ObservableObject {
         engine.start()
         triggerHaptic(.heavy)
         UIApplication.shared.isIdleTimerDisabled = true
+
+        // Schedule local notifications for all intervals
+        NotificationManager.shared.scheduleAllIntervals(
+            intervals: engine.intervals,
+            startingFrom: engine.currentIntervalIndex,
+            currentRemaining: engine.remainingSeconds
+        )
     }
 
     func pauseTimer() {
         engine.pause()
         triggerHaptic(.medium)
         UIApplication.shared.isIdleTimerDisabled = false
+        NotificationManager.shared.removeAllPending()
     }
 
     func resumeTimer() {
         engine.resume()
         triggerHaptic(.light)
         UIApplication.shared.isIdleTimerDisabled = true
+
+        // Re-schedule notifications from current position
+        NotificationManager.shared.scheduleAllIntervals(
+            intervals: engine.intervals,
+            startingFrom: engine.currentIntervalIndex,
+            currentRemaining: engine.remainingSeconds
+        )
     }
 
     func resetTimer() {
@@ -134,11 +160,32 @@ class TimerManager: ObservableObject {
         isSessionActive = false
         triggerHaptic(.rigid)
         UIApplication.shared.isIdleTimerDisabled = false
+        NotificationManager.shared.removeAllPending()
     }
 
     func skipInterval() {
         engine.skip()
         triggerHaptic(.soft)
+
+        // Reschedule notifications from new position
+        NotificationManager.shared.scheduleAllIntervals(
+            intervals: engine.intervals,
+            startingFrom: engine.currentIntervalIndex,
+            currentRemaining: engine.remainingSeconds
+        )
+    }
+
+    // MARK: - Next Interval Info
+
+    var nextInterval: TimerInterval? {
+        let nextIndex = engine.currentIntervalIndex + 1
+        guard nextIndex < engine.intervals.count else { return nil }
+        return engine.intervals[nextIndex]
+    }
+
+    var nextIntervalLabel: String? {
+        guard let next = nextInterval else { return nil }
+        return "Next: \(next.type.displayName) · \(next.formattedDuration)"
     }
 
     // MARK: - Session Persistence
@@ -156,7 +203,6 @@ class TimerManager: ObservableObject {
         session.setValue(engine.state == .completed, forKey: "wasCompleted")
         session.setValue(selectedWorkflow?.name ?? "Unknown", forKey: "workflowName")
 
-        // Link to workflow
         if let workflowId = selectedWorkflow?.id {
             let wfRequest = NSFetchRequest<NSManagedObject>(entityName: "CDWorkflow")
             wfRequest.predicate = NSPredicate(format: "id == %@", workflowId as CVarArg)
@@ -179,11 +225,9 @@ class TimerManager: ObservableObject {
 
     func playSound(_ name: String? = nil) {
         let soundName = name ?? selectedSound
-        // Built-in sounds: bell, chime, crystal, pulse
         guard let url = Bundle.main.url(forResource: soundName, withExtension: "wav")
                 ?? Bundle.main.url(forResource: soundName, withExtension: "mp3")
                 ?? Bundle.main.url(forResource: soundName, withExtension: "m4a") else {
-            // Fallback to system sound
             AudioServicesPlaySystemSound(1007)
             return
         }
@@ -237,6 +281,7 @@ class TimerManager: ObservableObject {
             Task { @MainActor in
                 self.playSound()
                 self.triggerNotificationHaptic(.success)
+                UIApplication.shared.isIdleTimerDisabled = false
             }
         }
 

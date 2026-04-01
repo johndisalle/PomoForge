@@ -39,8 +39,8 @@ struct ContentView: View {
         .onAppear {
             PersistenceController.shared.seedDefaultWorkflowIfNeeded()
             timerManager.loadWorkflows(context: viewContext)
+            NotificationManager.shared.requestPermission()
 
-            // Style the tab bar
             let appearance = UITabBarAppearance()
             appearance.configureWithOpaqueBackground()
             appearance.backgroundColor = UIColor.systemBackground

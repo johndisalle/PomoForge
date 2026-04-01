@@ -12,6 +12,7 @@ struct WorkflowListView: View {
     @State private var showingBuilder = false
     @State private var editingWorkflow: Workflow?
     @State private var showingPaywall = false
+    @State private var workflowToDelete: Workflow?
 
     var body: some View {
         NavigationStack {
@@ -25,7 +26,7 @@ struct WorkflowListView: View {
                         .swipeActions(edge: .trailing) {
                             if !workflow.isDefault {
                                 Button(role: .destructive) {
-                                    timerManager.deleteWorkflow(workflow, context: viewContext)
+                                    workflowToDelete = workflow
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
@@ -62,13 +63,38 @@ struct WorkflowListView: View {
             .sheet(isPresented: $showingPaywall) {
                 PaywallView()
             }
+            .alert("Delete Workflow?", isPresented: Binding(
+                get: { workflowToDelete != nil },
+                set: { if !$0 { workflowToDelete = nil } }
+            )) {
+                Button("Delete", role: .destructive) {
+                    if let workflow = workflowToDelete {
+                        timerManager.deleteWorkflow(workflow, context: viewContext)
+                    }
+                    workflowToDelete = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    workflowToDelete = nil
+                }
+            } message: {
+                if let workflow = workflowToDelete {
+                    Text("'\(workflow.name)' and all its data will be permanently deleted.")
+                }
+            }
             .overlay {
                 if timerManager.workflows.isEmpty {
-                    ContentUnavailableView(
-                        "No Workflows",
-                        systemImage: "list.bullet.rectangle",
-                        description: Text("Tap + to create your first custom workflow.")
-                    )
+                    ContentUnavailableView {
+                        Label("No Workflows", systemImage: "list.bullet.rectangle")
+                    } description: {
+                        Text("Create your first custom focus workflow.\nTailor work and break durations to your style.")
+                    } actions: {
+                        Button(action: { showingBuilder = true }) {
+                            Text("Create Workflow")
+                                .fontWeight(.semibold)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.orange)
+                    }
                 }
             }
         }
@@ -177,13 +203,11 @@ struct WorkflowBuilderView: View {
     var body: some View {
         NavigationStack {
             Form {
-                // Name
                 Section("Workflow Name") {
                     TextField("e.g. Writer Flow", text: $name)
                         .font(.headline)
                 }
 
-                // Intervals (drag to reorder)
                 Section {
                     ForEach($intervals) { $interval in
                         IntervalRow(interval: $interval)
@@ -204,7 +228,6 @@ struct WorkflowBuilderView: View {
                     }
                 }
 
-                // Add interval buttons
                 Section {
                     Button(action: { addInterval(.work) }) {
                         Label("Add Focus Interval", systemImage: "flame.fill")
@@ -220,7 +243,6 @@ struct WorkflowBuilderView: View {
                     }
                 }
 
-                // Quick templates
                 Section("Quick Templates") {
                     Button("Classic 25/5 x4") {
                         applyTemplate(work: 25, shortBreak: 5, rounds: 4, longBreak: 15)
@@ -230,6 +252,9 @@ struct WorkflowBuilderView: View {
                     }
                     Button("Sprint 15/3 x6") {
                         applyTemplate(work: 15, shortBreak: 3, rounds: 6, longBreak: 10)
+                    }
+                    Button("Ultra Focus 90/20 x2") {
+                        applyTemplate(work: 90, shortBreak: 20, rounds: 2, longBreak: 30)
                     }
                 }
                 .foregroundStyle(.orange)
@@ -269,7 +294,9 @@ struct WorkflowBuilderView: View {
         case .shortBreak: defaultDuration = 300
         case .longBreak: defaultDuration = 900
         }
-        intervals.append(TimerInterval(type: type, duration: defaultDuration))
+        withAnimation {
+            intervals.append(TimerInterval(type: type, duration: defaultDuration))
+        }
     }
 
     private func applyTemplate(work: Int, shortBreak: Int, rounds: Int, longBreak: Int) {
@@ -281,7 +308,9 @@ struct WorkflowBuilderView: View {
             }
         }
         newIntervals.append(TimerInterval(type: .longBreak, duration: longBreak * 60))
-        intervals = newIntervals
+        withAnimation {
+            intervals = newIntervals
+        }
     }
 
     private func save() {
@@ -320,12 +349,10 @@ struct IntervalRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Type indicator
             Circle()
                 .fill(colorForType(interval.type))
                 .frame(width: 10, height: 10)
 
-            // Type label
             Text(interval.type.displayName)
                 .font(.subheadline)
                 .fontWeight(.medium)
@@ -333,7 +360,6 @@ struct IntervalRow: View {
 
             Spacer()
 
-            // Duration stepper
             HStack(spacing: 8) {
                 Button(action: {
                     if interval.duration > 60 {

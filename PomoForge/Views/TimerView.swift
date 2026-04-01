@@ -11,46 +11,49 @@ struct TimerView: View {
     @StateObject private var liveActivityManager = LiveActivityManager.shared
     @Environment(\.scenePhase) private var scenePhase
     @State private var showResetConfirmation = false
+    @State private var showCelebration = false
+    @State private var celebrationScale: CGFloat = 0.5
+    @State private var celebrationOpacity: Double = 0
 
     var body: some View {
         NavigationStack {
             ZStack {
-                // Background gradient based on interval type
                 backgroundGradient
                     .ignoresSafeArea()
 
-                VStack(spacing: 32) {
-                    // Workflow selector
+                VStack(spacing: 24) {
                     workflowPicker
 
                     Spacer()
 
-                    // Interval indicator
                     intervalLabel
 
-                    // Circular timer
                     timerCircle
 
-                    // Time display
+                    // Next up indicator
+                    nextUpLabel
+
                     timeDisplay
 
-                    // Progress dots
                     intervalDots
 
                     Spacer()
 
-                    // Controls
                     controlButtons
 
                     Spacer().frame(height: 20)
                 }
                 .padding()
+
+                // Celebration overlay
+                if showCelebration {
+                    celebrationOverlay
+                }
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .background && timerManager.engine.state == .running {
-                    // Update widget when app goes to background
                     if let interval = timerManager.engine.currentInterval {
                         WidgetManager.shared.updateCurrentSession(
                             isActive: true,
@@ -68,7 +71,7 @@ struct TimerView: View {
             }
             .onChange(of: timerManager.engine.state) { _, newState in
                 if newState == .completed {
-                    timerManager.saveCompletedSession(context: viewContext)
+                    showCelebrationAnimation()
                     WidgetManager.shared.clearCurrentSession()
                     liveActivityManager.endActivity()
                 }
@@ -76,11 +79,92 @@ struct TimerView: View {
         }
     }
 
+    // MARK: - Celebration Overlay
+
+    private var celebrationOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.7)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    dismissCelebration()
+                }
+
+            VStack(spacing: 20) {
+                // Animated checkmark
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(size: 80))
+                    .foregroundStyle(.orange)
+                    .symbolEffect(.bounce, value: showCelebration)
+
+                Text("Workflow Complete!")
+                    .font(.title)
+                    .fontWeight(.bold)
+
+                Text(timerManager.selectedWorkflow?.name ?? "")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+
+                // Stats
+                HStack(spacing: 32) {
+                    VStack(spacing: 4) {
+                        Text("\(timerManager.engine.elapsedFocusSeconds / 60)")
+                            .font(.title2.bold())
+                        Text("Focus min")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    VStack(spacing: 4) {
+                        Text("\(timerManager.engine.completedIntervalsCount)")
+                            .font(.title2.bold())
+                        Text("Intervals")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.top, 8)
+
+                Button(action: { dismissCelebration() }) {
+                    Text("Done")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .frame(width: 200)
+                        .padding(.vertical, 14)
+                        .background(.orange, in: RoundedRectangle(cornerRadius: 14))
+                }
+                .padding(.top, 12)
+            }
+            .scaleEffect(celebrationScale)
+            .opacity(celebrationOpacity)
+        }
+    }
+
+    private func showCelebrationAnimation() {
+        showCelebration = true
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) {
+            celebrationScale = 1.0
+            celebrationOpacity = 1.0
+        }
+    }
+
+    private func dismissCelebration() {
+        timerManager.saveCompletedSession(context: viewContext)
+        timerManager.resetTimer()
+        withAnimation(.easeOut(duration: 0.2)) {
+            celebrationOpacity = 0
+            celebrationScale = 0.8
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            showCelebration = false
+            celebrationScale = 0.5
+        }
+    }
+
     // MARK: - Background
 
     private var backgroundGradient: some View {
         let color: Color = {
-            guard let interval = timerManager.engine.currentInterval else { return .black }
+            guard let interval = timerManager.engine.currentInterval,
+                  timerManager.engine.state != .idle else { return .clear }
             switch interval.type {
             case .work: return Color.orange.opacity(0.08)
             case .shortBreak: return Color.green.opacity(0.08)
@@ -144,12 +228,10 @@ struct TimerView: View {
 
     private var timerCircle: some View {
         ZStack {
-            // Background circle
             Circle()
                 .stroke(Color.gray.opacity(0.15), lineWidth: 8)
                 .frame(width: 260, height: 260)
 
-            // Progress circle
             Circle()
                 .trim(from: 0, to: timerManager.engine.progress)
                 .stroke(
@@ -160,7 +242,6 @@ struct TimerView: View {
                 .rotationEffect(.degrees(-90))
                 .animation(.linear(duration: 1), value: timerManager.engine.progress)
 
-            // Inner content
             VStack(spacing: 4) {
                 Text(timerManager.engine.formattedTime)
                     .font(.system(size: 64, weight: .thin, design: .rounded))
@@ -177,7 +258,33 @@ struct TimerView: View {
         }
     }
 
-    // MARK: - Time Display (overall progress)
+    // MARK: - Next Up Label
+
+    private var nextUpLabel: some View {
+        Group {
+            if timerManager.engine.state == .running || timerManager.engine.state == .paused,
+               let nextLabel = timerManager.nextIntervalLabel {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.right.circle.fill")
+                        .font(.caption)
+                    Text(nextLabel)
+                        .font(.caption)
+                }
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                .background(.ultraThinMaterial, in: Capsule())
+                .transition(.opacity.combined(with: .scale))
+            } else if timerManager.engine.state == .idle {
+                Text("Tap play to start focusing")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .animation(.easeInOut, value: timerManager.engine.currentIntervalIndex)
+    }
+
+    // MARK: - Time Display
 
     private var timeDisplay: some View {
         HStack(spacing: 24) {
@@ -213,6 +320,9 @@ struct TimerView: View {
                 Circle()
                     .fill(dotColor(for: index, interval: interval))
                     .frame(width: 8, height: 8)
+                    .scaleEffect(index == timerManager.engine.currentIntervalIndex && timerManager.engine.state == .running ? 1.3 : 1.0)
+                    .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true),
+                               value: timerManager.engine.state == .running && index == timerManager.engine.currentIntervalIndex)
             }
         }
     }
@@ -265,7 +375,7 @@ struct TimerView: View {
                 Text("You have \(timerManager.engine.elapsedFocusSeconds / 60) minutes of focus time. Save this session?")
             }
 
-            // Play/Pause (main button)
+            // Play/Pause
             Button(action: {
                 switch timerManager.engine.state {
                 case .idle:
@@ -276,9 +386,8 @@ struct TimerView: View {
                 case .paused:
                     timerManager.resumeTimer()
                 case .completed:
-                    timerManager.saveCompletedSession(context: viewContext)
-                    timerManager.resetTimer()
-                    liveActivityManager.endActivity()
+                    // Handled by celebration overlay
+                    break
                 }
             }) {
                 Image(systemName: mainButtonIcon)
