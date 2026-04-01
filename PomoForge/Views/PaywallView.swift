@@ -9,6 +9,9 @@ struct PaywallView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedPlan: Plan = .yearly
 
+    @State private var isPurchasing = false
+    @State private var errorMessage: String?
+
     enum Plan {
         case monthly, yearly
     }
@@ -79,19 +82,43 @@ struct PaywallView: View {
 
                         // Subscribe button
                         Button(action: subscribe) {
-                            Text("Start Free Trial")
-                                .font(.headline)
-                                .foregroundStyle(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(.orange, in: RoundedRectangle(cornerRadius: 16))
+                            if isPurchasing {
+                                ProgressView()
+                                    .tint(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(.orange, in: RoundedRectangle(cornerRadius: 16))
+                            } else {
+                                Text("Start Free Trial")
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(.orange, in: RoundedRectangle(cornerRadius: 16))
+                            }
                         }
+                        .disabled(isPurchasing)
                         .padding(.horizontal)
+
+                        if let errorMessage {
+                            Text(errorMessage)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal)
+                        }
 
                         // Restore + terms
                         VStack(spacing: 8) {
                             Button("Restore Purchases") {
-                                // await subscriptionManager.restorePurchases()
+                                Task {
+                                    do {
+                                        try await subscriptionManager.restorePurchases()
+                                        dismiss()
+                                    } catch {
+                                        errorMessage = error.localizedDescription
+                                    }
+                                }
                             }
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
@@ -117,14 +144,21 @@ struct PaywallView: View {
     }
 
     private func subscribe() {
-        // Placeholder — replace with RevenueCat purchase call:
-        // Task {
-        //     try await selectedPlan == .monthly
-        //         ? subscriptionManager.purchaseMonthly()
-        //         : subscriptionManager.purchaseYearly()
-        //     dismiss()
-        // }
-        print("RevenueCat: Purchase \(selectedPlan)")
+        isPurchasing = true
+        errorMessage = nil
+        Task {
+            do {
+                if selectedPlan == .monthly {
+                    try await subscriptionManager.purchaseMonthly()
+                } else {
+                    try await subscriptionManager.purchaseYearly()
+                }
+                dismiss()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            isPurchasing = false
+        }
     }
 }
 

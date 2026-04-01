@@ -219,9 +219,10 @@ struct SettingsView: View {
                 Text("1.0.0")
                     .foregroundStyle(.secondary)
             }
-            // Placeholder for restore purchases
             Button("Restore Purchases") {
-                // await subscriptionManager.restorePurchases()
+                Task {
+                    try? await subscriptionManager.restorePurchases()
+                }
             }
             .foregroundStyle(.orange)
         } header: {
